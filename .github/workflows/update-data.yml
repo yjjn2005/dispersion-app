@@ -1,0 +1,35 @@
+name: Update Stock Data
+
+on:
+  schedule:
+    - cron: '*/20 0-9 * * 1-5'   # 평일 09:00~18:40 KST (UTC 00~09) 20분마다
+    - cron: '0 23 * * 0'          # 일요일 08:00 KST 주간 사전 수집
+  workflow_dispatch:               # 수동 실행
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install yfinance -q
+
+      - name: Fetch stock data
+        run: python fetch_data.py
+
+      - name: Commit & push data.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          git diff --cached --quiet && echo "변경 없음" || git commit -m "chore: update stock data $(date +'%Y-%m-%d %H:%M KST' -d '+9 hours')"
+          git push

@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이격도 분석 | 유앤김 자산관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --navy:#0B1B33; --card:#13294B; --card-2:#0F2240;
+  --gold:#C9A227; --gold-soft:#E3C567; --ivory:#F2EDE3; --muted:#8CA0BE;
+  --up:#E5484D; --down:#3B82F6; --line:#24406B;
+  --buy:#2FA36B; --sell:#E5484D;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:linear-gradient(180deg,#08152A 0%,#0B1B33 40%,#0D2140 100%);
+  color:var(--ivory);
+  font-family:'Noto Sans KR','Malgun Gothic','맑은 고딕',sans-serif;
+  min-height:100vh; font-size:14px;
+  font-variant-numeric:tabular-nums;
+}
+@media(max-width:640px){ body{ padding-bottom:64px; } }
+.wrap{max-width:1080px;margin:0 auto;padding:20px 16px 60px}
+
+/* ── 헤더 ── */
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;
+  border-bottom:2px solid var(--gold);padding-bottom:16px;margin-bottom:0}
+.brand small{display:block;color:var(--gold);letter-spacing:.35em;font-size:11px;margin-bottom:6px}
+.brand h1{font-family:'Noto Serif KR',serif;font-weight:700;font-size:26px;line-height:1.2}
+.brand h1 span{color:var(--gold-soft)}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+select,button,input{
+  background:var(--card);color:var(--ivory);border:1px solid var(--line);
+  border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;cursor:pointer;
+  min-height:44px;
+}
+input{cursor:text;width:150px}
+input::placeholder{color:var(--muted)}
+button.gold{background:var(--gold);color:#0B1B33;font-weight:700;border-color:var(--gold)}
+button:disabled{opacity:.45;cursor:wait}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px}
+
+/* ── 동기화 상태바 ── */
+.sync-bar{
+  display:none;align-items:center;gap:6px;
+  font-size:11.5px;padding:5px 16px;
+  border-bottom:1px solid var(--line);
+  background:rgba(11,27,51,.7);
+  margin-bottom:0;
+}
+.sync-bar.ok{color:#4CCF8E}
+.sync-bar.err{color:#FF7A7E}
+.sync-dot{display:inline-block;width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sync-bar.ok .sync-dot{background:#4CCF8E;box-shadow:0 0 4px #4CCF8E}
+.sync-bar.err .sync-dot{background:#FF7A7E}
+
+/* ── 요약 스트립 ── */
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.sum-card{background:var(--card-2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.sum-card .label{color:var(--muted);font-size:12px;margin-bottom:6px}
+.sum-card .val{font-size:22px;font-weight:700;font-family:'Noto Serif KR',serif}
+.sum-card.buy .val{color:var(--buy)} .sum-card.sell .val{color:var(--sell)}
+.sum-card.gold .val{color:var(--gold-soft)}
+.updated{color:var(--muted);font-size:12px;margin:-8px 0 14px;text-align:right}
+
+/* ── 탭 ── */
+.tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;
+  color:var(--muted);padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;min-height:auto}
+.tab.active{color:var(--gold-soft);border-bottom-color:var(--gold)}
+.tab:hover{color:var(--ivory)}
+
+/* ── 이격도 가이드 ── */
+.guide{display:none}
+.guide.show{display:block}
+.guide h2{font-family:'Noto Serif KR',serif;font-size:19px;color:var(--gold-soft);margin:22px 0 10px}
+.guide h2:first-child{margin-top:0}
+.guide p{color:#C9D4E6;line-height:1.85;font-size:13.5px;margin-bottom:10px}
+.gtbl{width:100%;border-collapse:collapse;background:var(--card-2);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:8px 0 14px}
+.gtbl th{background:#0A1830;color:var(--gold-soft);font-size:12.5px;font-weight:500;padding:10px 12px;text-align:left;letter-spacing:.04em}
+.gtbl td{padding:10px 12px;border-top:1px solid #1B3457;font-size:13px;line-height:1.7;vertical-align:top}
+.gtbl td:first-child{color:var(--gold-soft);font-weight:700;white-space:nowrap}
+.gtbl .num{font-weight:700;color:var(--ivory);white-space:nowrap}
+
+/* ── 테이블 ── */
+.tbl-wrap{overflow-x:auto;border-radius:12px}
+.tbl{width:100%;min-width:640px;border-collapse:collapse;background:var(--card-2);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.tbl thead th{background:#0A1830;color:var(--gold-soft);font-size:12px;font-weight:500;
+  padding:11px 10px;text-align:right;letter-spacing:.05em;white-space:nowrap;cursor:pointer;user-select:none}
+.tbl thead th:first-child{text-align:left;padding-left:16px}
+.tbl thead th .arrow{color:var(--gold);font-size:10px}
+.tbl td{padding:11px 10px;border-top:1px solid #1B3457;text-align:right;white-space:nowrap;font-size:13.5px}
+.tbl td:first-child{text-align:left;padding-left:16px}
+.tbl tbody tr{cursor:pointer;transition:background .15s}
+.tbl tbody tr:hover{background:#1A3560}
+.nm{font-weight:700} .tk{color:var(--muted);font-size:11.5px;display:block}
+.up{color:var(--up)} .down{color:var(--down)}
+.d-val{font-weight:700;font-size:14.5px}
+
+/* 시그널 배지 */
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:.03em}
+.badge.buy{background:rgba(47,163,107,.16);color:#4CCF8E;border:1px solid rgba(47,163,107,.5)}
+.badge.sell{background:rgba(229,72,77,.14);color:#FF7A7E;border:1px solid rgba(229,72,77,.5)}
+.badge.hold{background:rgba(140,160,190,.12);color:var(--muted);border:1px solid #2A4670}
+
+/* 시그니처: 이격도 게이지 */
+.gauge{position:relative;width:120px;height:8px;border-radius:4px;display:inline-block;vertical-align:middle;
+  background:linear-gradient(90deg,rgba(47,163,107,.55) 0 22%,rgba(140,160,190,.25) 22% 78%,rgba(229,72,77,.55) 78% 100%)}
+.gauge .pin{position:absolute;top:-4px;width:3px;height:16px;background:var(--gold-soft);border-radius:2px;box-shadow:0 0 6px rgba(201,162,39,.8)}
+.gauge .mid{position:absolute;top:-2px;left:50%;width:1px;height:12px;background:rgba(242,237,227,.5)}
+
+.del{background:none;border:none;color:var(--muted);font-size:15px;padding:2px 6px;min-height:auto}
+.del:hover{color:var(--sell)}
+.err-row td{color:var(--sell);font-size:12px;white-space:normal;max-width:420px}
+
+/* ── 상세 모달 ── */
+.modal-bg{position:fixed;inset:0;background:rgba(4,10,20,.82);display:none;z-index:50;overflow-y:auto;padding:24px 12px}
+.modal-bg.open{display:block}
+.modal{max-width:900px;margin:0 auto;background:var(--card-2);border:1px solid var(--gold);border-radius:14px;padding:22px}
+.modal h2{font-family:'Noto Serif KR',serif;font-size:21px;margin-bottom:2px}
+.modal .sub{color:var(--muted);font-size:12.5px;margin-bottom:14px}
+.modal .close{float:right;font-size:18px;background:none;border:1px solid var(--line);border-radius:8px;padding:4px 12px;min-height:auto}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.stat{background:#0F2240;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat .label{color:var(--muted);font-size:11px}
+.stat .val{font-size:16px;font-weight:700;margin-top:3px}
+.chart-box{background:#0A1830;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.chart-box h3{font-size:12.5px;color:var(--gold-soft);font-weight:500;margin-bottom:8px;letter-spacing:.05em}
+.legend-note{color:var(--muted);font-size:11.5px;margin-top:10px;line-height:1.6}
+
+/* 안내 문구 */
+.notice{margin-top:22px;padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--gold);
+  border-radius:8px;color:var(--muted);font-size:12px;line-height:1.7;background:rgba(19,41,75,.5)}
+
+/* ── 이격도 해석 패널 ── */
+.interp-wrap{margin-top:14px;display:none}
+.interp-wrap.show{display:block}
+.interp-btn{width:100%;background:linear-gradient(90deg,#0A1E3D,#13294B);border:1px solid var(--gold);
+  color:var(--gold-soft);font-weight:700;font-size:13.5px;padding:11px 16px;border-radius:10px;
+  letter-spacing:.04em;transition:background .2s;min-height:auto}
+.interp-btn:hover{background:linear-gradient(90deg,#0F2850,#1A3A6A)}
+.interp-panel{background:#0A1830;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:10px}
+.interp-panel h4{color:var(--gold-soft);font-family:'Noto Serif KR',serif;font-size:15px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #1B3457}
+.ma-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.ma-cell{background:#0F2240;border:1px solid var(--line);border-radius:8px;padding:9px 10px;text-align:center}
+.ma-cell .mc-period{color:var(--muted);font-size:11px;margin-bottom:3px}
+.ma-cell .mc-val{font-size:17px;font-weight:700}
+.ma-cell .mc-sig{font-size:10.5px;margin-top:3px;padding:2px 7px;border-radius:999px;display:inline-block}
+.mc-sig.hot{background:rgba(229,72,77,.15);color:#FF7A7E;border:1px solid rgba(229,72,77,.4)}
+.mc-sig.cold{background:rgba(59,130,246,.15);color:#7AB8FF;border:1px solid rgba(59,130,246,.4)}
+.mc-sig.ok{background:rgba(140,160,190,.1);color:var(--muted);border:1px solid #2A4670}
+.interp-body{color:#C9D4E6;font-size:13px;line-height:1.85}
+.interp-body .hl-buy{color:#4CCF8E;font-weight:700}
+.interp-body .hl-sell{color:#FF7A7E;font-weight:700}
+.interp-body .hl-gold{color:var(--gold-soft);font-weight:700}
+.interp-body p{margin-bottom:8px}
+.interp-body p:last-child{margin-bottom:0}
+.interp-disc{margin-top:10px;padding:10px 12px;border-left:2px solid var(--gold);font-size:11.5px;color:var(--muted);line-height:1.6;background:rgba(201,162,39,.05)}
+
+.loading-bar{color:var(--gold-soft);font-size:13px;padding:14px;text-align:center}
+
+/* ── 연동 설정 모달 ── */
+.sync-modal-bg{position:fixed;inset:0;background:rgba(4,10,20,.85);display:none;z-index:100;
+  align-items:center;justify-content:center;padding:16px}
+.sync-modal-bg.open{display:flex}
+.sync-modal{background:var(--card-2);border:1px solid var(--gold);border-radius:14px;padding:24px;
+  width:100%;max-width:480px;max-height:100vh;overflow-y:auto}
+.sync-modal h3{font-family:'Noto Serif KR',serif;font-size:18px;color:var(--gold-soft);margin-bottom:16px}
+.sync-field{margin-bottom:14px}
+.sync-field label{display:block;color:var(--muted);font-size:12px;margin-bottom:6px;letter-spacing:.05em}
+.sync-field input{width:100%;background:#0A1830;border:1px solid var(--line);border-radius:8px;
+  color:var(--ivory);padding:10px 12px;font-family:inherit;font-size:13px}
+.sync-field input:focus{outline:1px solid var(--gold-soft)}
+.sync-field small{display:block;color:var(--muted);font-size:11px;margin-top:5px;line-height:1.6}
+.sync-actions{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+.sync-actions button{flex:1;min-width:100px}
+.sync-close{float:right;font-size:16px;background:none;border:1px solid var(--line);
+  border-radius:8px;padding:3px 10px;color:var(--ivory);cursor:pointer;min-height:auto}
+.sync-status-inline{margin-top:14px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
+.sync-status-inline.ok{background:rgba(47,163,107,.1);border:1px solid rgba(47,163,107,.3);color:#4CCF8E}
+.sync-status-inline.err{background:rgba(229,72,77,.1);border:1px solid rgba(229,72,77,.3);color:#FF7A7E}
+
+/* ── 토스트 ── */
+.toast{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#13294B;border:1px solid var(--gold);border-radius:10px;
+  color:var(--ivory);font-size:13px;padding:10px 20px;
+  opacity:0;transition:opacity .25s,transform .25s;z-index:200;
+  white-space:nowrap;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── 모바일 하단 고정 추가바 ── */
+.mobile-add-bar{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;
+  background:rgba(11,27,51,.97);border-top:1px solid var(--line);
+  padding:8px 12px;z-index:150;
+  gap:8px;align-items:center;
+}
+@media(max-width:640px){
+  .mobile-add-bar{display:flex}
+  .mobile-add-bar input{flex:1;min-width:0;width:auto}
+}
+
+/* ── 반응형 ── */
+@media(max-width:760px){
+  .summary{grid-template-columns:repeat(2,1fr)}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .ma-grid{grid-template-columns:repeat(2,1fr)}
+  .gauge{width:76px}
+  .brand h1{font-size:21px}
+  .sync-modal{max-width:100%;border-radius:12px}
+}
+@media(max-width:640px){
+  .controls .ticker-add-group{display:none} /* 모바일에선 하단바로 대체 */
+  .controls{flex-wrap:nowrap;overflow-x:auto;gap:6px;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  select{min-width:0;flex-shrink:1;font-size:12px;padding:8px 8px}
+  /* 테이블 — 등락률·게이지 컬럼 숨김 */
+  .tbl{min-width:0}
+  .tbl thead th:nth-child(3),
+  .tbl td:nth-child(3),
+  .tbl thead th:nth-child(6),
+  .tbl td:nth-child(6){ display:none }
+  .modal-bg{padding:8px 4px}
+  .modal{padding:14px 10px}
+  .sync-modal-bg{align-items:flex-end;padding:0}
+  .sync-modal{border-radius:14px 14px 0 0;max-height:85vh}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <small>U&amp;KIM ASSET MANAGEMENT</small>
+      <h1>종목별 <span>이격도</span> 분석</h1>
+    </div>
+    <div class="controls">
+      <select id="phase" title="시장 국면에 따라 매수·매도 임계값이 조정됩니다">
+        <option value="side">횡보장 (매수 95 · 매도 105)</option>
+        <option value="bull">상승장 (매수 98 · 매도 106)</option>
+        <option value="bear">하락장 (매수 92 · 매도 104)</option>
+      </select>
+      <span class="ticker-add-group" style="display:contents">
+        <input id="newTicker" placeholder="티커 추가 (예: 005930.KS)">
+        <button id="addBtn">추가</button>
+      </span>
+      <button id="proxyBtn" title="Cloudflare Worker 등 개인 프록시 주소를 입력하면 실시간 모드로 전환됩니다">⚙</button>
+      <button id="syncBtn" title="GitHub Gist 크로스 디바이스 연동 설정">☁ 연동</button>
+      <button id="refreshBtn" class="gold">새로고침</button>
+    </div>
+  </header>
+
+  <!-- 동기화 상태바 -->
+  <div class="sync-bar" id="syncBar"></div>
+
+  <div style="height:18px"></div>
+  <div class="updated" id="updatedAt"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="stock">관심종목</button>
+    <button class="tab" data-tab="idx">주요지수</button>
+    <button class="tab" data-tab="guide">이격도 가이드</button>
+  </div>
+
+  <div class="guide" id="guide">
+    <h2>이격도란</h2>
+    <p><b style="color:var(--gold-soft)">이격도 = 현재 주가 ÷ N일 이동평균 × 100.</b>
+    주가가 이동평균선에서 얼마나 떨어져 있는지를 백분율로 나타내며, 가격은 결국 평균으로 되돌아오려는 성질(평균회귀)이 있다는 전제에서 과열·침체를 진단하는 지표입니다.
+    100 초과는 이동평균선 위(강세), 100 미만은 아래(약세)를 뜻합니다.</p>
+
+    <h2>일수별 이격도의 의미</h2>
+    <table class="gtbl">
+      <thead><tr><th>기간</th><th>별칭·성격</th><th>의미와 활용</th><th>일반 기준</th></tr></thead>
+      <tbody>
+        <tr><td>5일</td><td>초단기 (1주 매매선)</td>
+          <td>최근 1주 수급의 쏠림을 반영. 변동성이 커서 노이즈가 많아 단독 사용보다 단기 과열 확인용으로 활용.</td>
+          <td class="num">97 이하 과매도<br>103 이상 과매수</td></tr>
+        <tr><td>10일</td><td>단기 추세선</td>
+          <td>2주간의 단기 추세 이탈 정도. 스윙 매매의 진입·청산 타이밍 보조 지표.</td>
+          <td class="num">96 이하 / 104 이상</td></tr>
+        <tr><td>20일</td><td>심리선 (한 달)</td>
+          <td>시장 참여자들의 평균 매수단가에 가장 가까워 <b>단기 매매 시점 포착의 표준</b>. 본 앱 시그널의 1차 기준.</td>
+          <td class="num">95 이하 매수 관심<br>105 이상 매도 관심</td></tr>
+        <tr><td>60일</td><td>수급선 (한 분기)</td>
+          <td>분기 단위 수급과 중기 추세 판단. 20일 이격도와 함께 볼 때 신뢰도가 높아지며, 본 앱 시그널의 2차 기준.</td>
+          <td class="num">90 이하 매수 관심<br>110 이상 매도 관심</td></tr>
+        <tr><td>120일</td><td>경기선 (반년)</td>
+          <td>경기 사이클과 장기 추세 반영. 대세 상승·하락 전환 판단이나 장기 분할매수 구간 설정에 활용.</td>
+          <td class="num">85~88 이하 침체권<br>112~115 이상 과열권</td></tr>
+      </tbody>
+    </table>
+
+    <h2>시장 국면별 20일 이격도 임계값</h2>
+    <table class="gtbl">
+      <thead><tr><th>국면</th><th>매수 기준</th><th>매도 기준</th><th>논리</th></tr></thead>
+      <tbody>
+        <tr><td>상승장</td><td class="num">98 이하</td><td class="num">106 이상</td>
+          <td>상승 탄력이 강해 깊은 조정 없이 반등하므로 매수 기준을 높여 선제 진입.</td></tr>
+        <tr><td>횡보장</td><td class="num">95 이하</td><td class="num">105 이상</td>
+          <td>박스권 평균회귀가 가장 잘 작동하는 표준 구간.</td></tr>
+        <tr><td>하락장</td><td class="num">92 이하</td><td class="num">104 이상</td>
+          <td>회복력이 둔화되므로 더 깊은 낙폭에서만 보수적으로 매수.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>활용 시 유의점</h2>
+    <p>① 구조적 성장주는 이격도가 장기간 100을 웃돌 수 있어 과매수 신호만으로 매도하면 상승분을 놓칠 수 있습니다. 임계값 도달 자체보다 <b>변곡점(이격도의 방향 전환)</b>을 함께 확인하십시오.</p>
+    <p>② 하락 추세의 종목은 과매도 신호가 반복될 수 있습니다(낙폭 과대의 함정). RSI·볼린저밴드·거래량 등과 교차 검증하고, 분할 매수로 대응하는 것이 안전합니다.</p>
+    <p>③ 지수 이격도(주요지수 탭)는 개별 종목보다 평균회귀 신뢰도가 높아 시장 전체의 과열·침체 온도계로 활용하기 좋습니다. 지수가 과매도인데 보유 종목만 과매수라면 종목 교체를 검토할 신호입니다.</p>
+  </div>
+
+  <div class="summary">
+    <div class="sum-card buy"><div class="label">과매도 (매수 관심)</div><div class="val" id="cntBuy">–</div></div>
+    <div class="sum-card"><div class="label">중립</div><div class="val" id="cntHold">–</div></div>
+    <div class="sum-card sell"><div class="label">과매수 (매도 관심)</div><div class="val" id="cntSell">–</div></div>
+    <div class="sum-card gold"><div class="label">전체 평균 이격도 (20일)</div><div class="val" id="avgD">–</div></div>
+  </div>
+
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th data-k="name">종목</th>
+        <th data-k="price">현재가</th>
+        <th data-k="chg">등락률</th>
+        <th data-k="d20">이격도 20일 <span class="arrow" id="a-d20">▲</span></th>
+        <th data-k="d60">이격도 60일</th>
+        <th>게이지 (20일)</th>
+        <th data-k="sig">시그널</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="8" class="loading-bar">시세 데이터를 불러오는 중입니다…</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="notice">
+    <b style="color:var(--gold-soft)">이격도(Disparity)</b> = 현재 주가 ÷ 이동평균 × 100.
+    100 초과는 이동평균 상단(강세), 100 미만은 하단(약세)을 의미합니다.
+    시그널은 시장 국면별 20일 이격도 임계값과 60일 이격도(매수 90 이하 · 매도 110 이상)를 함께 반영한 참고 지표이며,
+    투자 판단과 책임은 투자자 본인에게 있습니다.
+    시세 출처: <b style="color:var(--gold-soft)">야후 파이낸스 → 구글 파이낸스 → 네이버 증권</b> 순으로 연동합니다.
+    기본 모드는 GitHub Actions가 20분마다 갱신하는 자동갱신 데이터이며,
+    ⚙ 버튼에서 개인 프록시를 설정하면 실시간 조회 모드로 전환됩니다.
+    행을 누르면 주가·이동평균·이격도 추이 차트를 확인할 수 있습니다.
+  </div>
+</div>
+
+<!-- 상세 모달 -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <button class="close" id="modalClose">✕</button>
+    <h2 id="mTitle"></h2>
+    <div class="sub" id="mSub"></div>
+    <div class="stats">
+      <div class="stat"><div class="label">현재가</div><div class="val" id="mPrice"></div></div>
+      <div class="stat"><div class="label">20일 이동평균</div><div class="val" id="mMa20"></div></div>
+      <div class="stat"><div class="label">60일 이동평균</div><div class="val" id="mMa60"></div></div>
+      <div class="stat"><div class="label">시그널</div><div class="val" id="mSig"></div></div>
+    </div>
+    <div class="chart-box">
+      <h3>주가 · 20일선 · 60일선 (최근 6개월)</h3>
+      <canvas id="priceChart" height="230"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>이격도 추이 — 금색 점선: 매수·매도 임계값 / 회색 실선: 기준 100</h3>
+      <canvas id="dispChart" height="180"></canvas>
+    </div>
+    <div class="legend-note" id="mNote"></div>
+
+    <div class="interp-wrap" id="interpWrap">
+      <button class="interp-btn" id="interpBtn">▶ 이격도 해석 보기</button>
+      <div class="interp-panel" id="interpPanel" style="display:none">
+        <h4>📊 이격도 종합 해석</h4>
+        <div class="ma-grid" id="maGrid"></div>
+        <div class="interp-body" id="interpBody"></div>
+        <div class="interp-disc">⚠ 이격도는 기술적 보조 지표로, 단독 활용 시 오류 가능성이 있습니다. 투자 결정 전 반드시 기업 펀더멘털·시장 환경·개인 투자 성향을 종합적으로 검토하십시오.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gist 연동 설정 모달 -->
+<div class="sync-modal-bg" id="syncModalBg">
+  <div class="sync-modal">
+    <button class="sync-close" id="syncModalClose">✕</button>
+    <h3>☁ GitHub Gist 연동 설정</h3>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.7">
+      GitHub Personal Access Token과 Gist ID를 입력하면 다른 기기와 관심종목 목록을 자동으로 동기화합니다.<br>
+      Gist ID를 비워두면 처음 저장 시 자동으로 새 Gist를 생성합니다.
+    </p>
+    <div class="sync-field">
+      <label>GitHub Personal Access Token (PAT)</label>
+      <input type="password" id="syncTokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+      <small>Settings → Developer settings → Personal access tokens → gist 권한 부여</small>
+    </div>
+    <div class="sync-field">
+      <label>Gist ID <span style="color:var(--gold-soft)">(선택 — 비워두면 자동 생성)</span></label>
+      <input type="text" id="syncGistIdInput" placeholder="예: abc123def456...">
+      <small>이미 Gist가 있다면 URL의 마지막 해시값을 입력하세요.</small>
+    </div>
+    <div class="sync-status-inline" id="syncStatusInline"></div>
+    <div class="sync-actions">
+      <button class="gold" id="syncSaveBtn">저장 &amp; 연결</button>
+      <button id="syncLoadBtn">지금 불러오기</button>
+      <button id="syncDisconnectBtn" style="border-color:var(--sell);color:#FF7A7E">연결 끊기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 모바일 하단 고정 종목 추가바 -->
+<div class="mobile-add-bar" id="mobileAddBar">
+  <input id="mobileNewTicker" placeholder="티커 추가 (예: 005930.KS)" style="font-size:13px">
+  <button id="mobileAddBtn" class="gold" style="white-space:nowrap;padding:10px 16px">+ 추가</button>
+</div>
+
+<script>
+/* ═══════════ 설정 ═══════════ */
+const DEFAULT_WATCHLIST = [
+  {t:"005930.KS", n:"삼성전자", g:"stock"},
+  {t:"000660.KS", n:"SK하이닉스", g:"stock"},
+  {t:"006800.KS", n:"미래에셋증권", g:"stock"},
+  {t:"005380.KS", n:"현대차", g:"stock"},
+  {t:"010120.KS", n:"LS일렉트릭", g:"stock"},
+  {t:"018290.KQ", n:"브이티", g:"stock"},
+  {t:"034020.KS", n:"두산에너빌리티", g:"stock"},
+  {t:"373220.KS", n:"LG에너지솔루션", g:"stock"},
+  {t:"329180.KS", n:"HD현대중공업", g:"stock"},
+  {t:"108490.KQ", n:"로보티즈", g:"stock"},
+  {t:"277810.KQ", n:"레인보우로보틱스", g:"stock"},
+  {t:"278470.KS", n:"에이피알", g:"stock"},
+  {t:"9984.T",    n:"소프트뱅크", g:"stock"},
+  {t:"NVDA",      n:"엔비디아", g:"stock"},
+  {t:"CRCL",      n:"서클 (CRCL)", g:"stock"},
+  {t:"IONQ",      n:"아이온큐", g:"stock"},
+  {t:"TWST",      n:"트위스트 바이오", g:"stock"},
+  {t:"CRSP",      n:"크리스퍼 테라퓨틱스", g:"stock"},
+  {t:"SCHD",      n:"SCHD", g:"stock"},
+  {t:"^KS11",     n:"코스피", g:"idx"},
+  {t:"^KQ11",     n:"코스닥", g:"idx"},
+  {t:"^IXIC",     n:"나스닥 종합", g:"idx"},
+  {t:"^GSPC",     n:"S&P 500", g:"idx"},
+  {t:"^DJI",      n:"다우존스", g:"idx"},
+  {t:"^SOX",      n:"필라델피아 반도체", g:"idx"},
+  {t:"KORU",      n:"KORU (한국 3배 ETF)", g:"idx"}
+];
+
+const PHASES = {
+  side:{buy:95, sell:105, label:"횡보장"},
+  bull:{buy:98, sell:106, label:"상승장"},
+  bear:{buy:92, sell:104, label:"하락장"}
+};
+const D60 = {buy:90, sell:110};
+
+const store = {
+  get(k){ try{return JSON.parse(localStorage.getItem(k))}catch(e){return null} },
+  set(k,v){ try{localStorage.setItem(k,JSON.stringify(v))}catch(e){} }
+};
+
+let watchlist = store.get("dispWatchlist") || DEFAULT_WATCHLIST.slice();
+watchlist.forEach(w=>{ if(!w.g) w.g = w.t.startsWith("^") ? "idx" : "stock"; });
+if(!watchlist.some(w=>w.g==="idx")){
+  DEFAULT_WATCHLIST.filter(w=>w.g==="idx").forEach(w=>watchlist.push({...w}));
+  store.set("dispWatchlist", watchlist);
+}
+let activeTab = "stock";
+let rows = [];
+let sortKey = "d20", sortAsc = true;
+let charts = {price:null, disp:null};
+
+/* ═══════════ Gist 연동 ═══════════ */
+let syncPollTimer = null;
+let lastSyncTime = 0;
+let lastRemoteWatchlistStr = "";
+
+function updateSyncStatus(status, msg){
+  const bar = document.getElementById("syncBar");
+  if(!bar) return;
+  if(status === "none"){ bar.style.display = "none"; return; }
+  bar.style.display = "flex";
+  if(status === "ok"){
+    const mins = lastSyncTime ? Math.round((Date.now() - lastSyncTime) / 60000) : 0;
+    bar.innerHTML = `<span class="sync-dot ok"></span> Gist 연동 중 · 마지막 동기화 ${mins === 0 ? "방금" : mins + "분 전"}`;
+    bar.className = "sync-bar ok";
+  } else if(status === "error"){
+    bar.innerHTML = `<span class="sync-dot err"></span> 연동 오류: ${msg || "알 수 없음"}`;
+    bar.className = "sync-bar err";
+  }
+}
+
+async function gistLoad(){
+  const token = store.get("syncToken");
+  const gistId = store.get("syncGistId");
+  if(!token || !gistId) return null;
+  const r = await fetch(`https://api.github.com/gists/${gistId}`, {
+    headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" },
+    cache: "no-store"
+  });
+  if(!r.ok) throw new Error(`Gist API 오류 ${r.status}`);
+  const j = await r.json();
+  const f = j.files && j.files["dispersion_watchlist.json"];
+  if(!f) throw new Error("dispersion_watchlist.json 파일 없음");
+  return JSON.parse(f.content);
+}
+
+async function gistSave(wl){
+  const token = store.get("syncToken");
+  let gistId = store.get("syncGistId");
+  if(!token) return;
+  const content = JSON.stringify({ watchlist: wl, updated: new Date().toISOString() }, null, 2);
+  const files = { "dispersion_watchlist.json": { content } };
+  if(!gistId){
+    const r = await fetch("https://api.github.com/gists", {
+      method: "POST",
+      headers: { Authorization: `token ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ description: "이격도 분석 앱 관심종목", public: false, files })
+    });
+    if(!r.ok) throw new Error(`Gist 생성 오류 ${r.status}`);
+    const j = await r.json();
+    store.set("syncGistId", j.id);
+    const el = document.getElementById("syncGistIdInput");
+    if(el) el.value = j.id;
+    lastRemoteWatchlistStr = JSON.stringify(wl);
+  } else {
+    const r = await fetch(`https://api.github.com/gists/${gistId}`, {
+      method: "PATCH",
+      headers: { Authorization: `token ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ files })
+    });
+    if(!r.ok) throw new Error(`Gist 저장 오류 ${r.status}`);
+    lastRemoteWatchlistStr = JSON.stringify(wl);
+  }
+  lastSyncTime = Date.now();
+  updateSyncStatus("ok");
+}
+
+function startSyncPoll(){
+  if(syncPollTimer) clearInterval(syncPollTimer);
+  const token = store.get("syncToken");
+  const gistId = store.get("syncGistId");
+  if(!token || !gistId) return;
+  updateSyncStatus("ok");
+  syncPollTimer = setInterval(async () => {
+    try{
+      const data = await gistLoad();
+      if(!data || !data.watchlist) return;
+      const remoteStr = JSON.stringify(data.watchlist);
+      if(remoteStr !== lastRemoteWatchlistStr && lastRemoteWatchlistStr !== ""){
+        watchlist = data.watchlist;
+        store.set("dispWatchlist", watchlist);
+        lastRemoteWatchlistStr = remoteStr;
+        loadAll();
+        showToast("☁ 다른 기기에서 목록이 업데이트됐습니다");
+      }
+      if(lastRemoteWatchlistStr === "") lastRemoteWatchlistStr = remoteStr;
+      lastSyncTime = Date.now();
+      updateSyncStatus("ok");
+    }catch(e){
+      updateSyncStatus("error", e.message);
+    }
+  }, 60000);
+}
+
+function stopSyncPoll(){
+  if(syncPollTimer){ clearInterval(syncPollTimer); syncPollTimer = null; }
+  updateSyncStatus("none");
+}
+
+/* 초기 연동 확인 */
+(function initSync(){
+  const token = store.get("syncToken");
+  const gistId = store.get("syncGistId");
+  if(token && gistId){
+    startSyncPoll();
+    // 첫 로드 시 Gist에서 불러와 watchlist 갱신
+    gistLoad().then(data=>{
+      if(data && data.watchlist){
+        watchlist = data.watchlist;
+        store.set("dispWatchlist", watchlist);
+        lastRemoteWatchlistStr = JSON.stringify(watchlist);
+        lastSyncTime = Date.now();
+        updateSyncStatus("ok");
+      }
+    }).catch(e=>updateSyncStatus("error", e.message));
+  }
+})();
+
+/* ═══════════ Gist 모달 UI ═══════════ */
+document.getElementById("syncBtn").addEventListener("click", ()=>{
+  const t = store.get("syncToken") || "";
+  const g = store.get("syncGistId") || "";
+  document.getElementById("syncTokenInput").value = t;
+  document.getElementById("syncGistIdInput").value = g;
+  document.getElementById("syncStatusInline").style.display = "none";
+  document.getElementById("syncModalBg").classList.add("open");
+});
+document.getElementById("syncModalClose").addEventListener("click", ()=>{
+  document.getElementById("syncModalBg").classList.remove("open");
+});
+document.getElementById("syncModalBg").addEventListener("click", e=>{
+  if(e.target.id === "syncModalBg") e.target.classList.remove("open");
+});
+
+document.getElementById("syncSaveBtn").addEventListener("click", async ()=>{
+  const token = document.getElementById("syncTokenInput").value.trim();
+  const gistId = document.getElementById("syncGistIdInput").value.trim();
+  if(!token){ showSyncInline("err","Personal Access Token을 입력하세요."); return; }
+  store.set("syncToken", token);
+  if(gistId) store.set("syncGistId", gistId);
+  else store.set("syncGistId", "");
+  showSyncInline("ok","저장됐습니다. Gist에 현재 목록을 저장 중…");
+  try{
+    await gistSave(watchlist);
+    const newId = store.get("syncGistId");
+    document.getElementById("syncGistIdInput").value = newId || "";
+    showSyncInline("ok","✅ 연결 완료! Gist ID: " + (newId || ""));
+    startSyncPoll();
+  }catch(e){
+    showSyncInline("err","저장 실패: " + e.message);
+    updateSyncStatus("error", e.message);
+  }
+});
+
+document.getElementById("syncLoadBtn").addEventListener("click", async ()=>{
+  showSyncInline("ok","Gist에서 불러오는 중…");
+  try{
+    const data = await gistLoad();
+    if(!data || !data.watchlist) throw new Error("데이터 없음");
+    watchlist = data.watchlist;
+    store.set("dispWatchlist", watchlist);
+    lastRemoteWatchlistStr = JSON.stringify(watchlist);
+    lastSyncTime = Date.now();
+    updateSyncStatus("ok");
+    showSyncInline("ok","✅ " + watchlist.length + "개 종목을 불러왔습니다.");
+    loadAll();
+  }catch(e){
+    showSyncInline("err","불러오기 실패: " + e.message);
+  }
+});
+
+document.getElementById("syncDisconnectBtn").addEventListener("click", ()=>{
+  store.set("syncToken","");
+  store.set("syncGistId","");
+  stopSyncPoll();
+  lastRemoteWatchlistStr = "";
+  document.getElementById("syncTokenInput").value = "";
+  document.getElementById("syncGistIdInput").value = "";
+  showSyncInline("ok","연결이 해제됐습니다. 로컬 모드로 전환됩니다.");
+});
+
+function showSyncInline(type, msg){
+  const el = document.getElementById("syncStatusInline");
+  el.textContent = msg;
+  el.className = "sync-status-inline " + type;
+  el.style.display = "block";
+}
+
+/* ═══════════ 토스트 ═══════════ */
+function showToast(msg){
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.classList.add("show"), 10);
+  setTimeout(()=>{ t.classList.remove("show"); setTimeout(()=>t.remove(), 300); }, 3000);
+}
+
+/* ═══════════ 데이터 수집 ═══════════ */
+function personalProxy(){ return store.get("dispProxy") || ""; }
+async function fetchViaProxy(url, asJson){
+  const pp = personalProxy();
+  const tries = [];
+  if(pp) tries.push(pp.replace(/\/+$/,"") + "/?url=" + encodeURIComponent(url));
+  tries.push(url,
+    "https://corsproxy.io/?url=" + encodeURIComponent(url),
+    "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
+    "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url));
+  for(const u of tries){
+    try{
+      const ctrl = new AbortController();
+      const timer = setTimeout(()=>ctrl.abort(), 10000);
+      const r = await fetch(u, {cache:"no-store", signal:ctrl.signal});
+      clearTimeout(timer);
+      if(!r.ok) continue;
+      return asJson ? await r.json() : await r.text();
+    }catch(e){ /* 다음 경로 */ }
+  }
+  throw new Error("수신 실패");
+}
+
+async function loadDataJson(){
+  const r = await fetch("./data.json?t=" + Date.now(), {cache:"no-store"});
+  if(!r.ok) throw new Error("data.json 없음");
+  return await r.json();
+}
+function rowsFromDataJson(d){
+  const out = [];
+  watchlist.forEach(w=>{
+    const s = d.stocks && d.stocks[w.t];
+    if(!s){ out.push({t:w.t, n:w.n, g:w.g, error:"data.json에 없는 종목 — tickers.json에 추가 후 Actions 실행"}); return; }
+    if(s.error || s.price==null || !s.closes){ out.push({t:w.t, n:w.n, g:w.g, error:s.error||"수집 실패"}); return; }
+    try{
+      out.push({...analyze(w.t, w.n, {hist:{closes:s.closes, dates:s.dates}, price:s.price,
+        currency:s.currency||"KRW", source:(s.source||"야후")+"·자동갱신"}), g:w.g});
+    }catch(e){ out.push({t:w.t, n:w.n, g:w.g, error:e.message}); }
+  });
+  return out;
+}
+
+async function fetchYahoo(ticker){
+  const j = await fetchViaProxy(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1d`, true);
+  const res = j.chart && j.chart.result && j.chart.result[0];
+  if(!res || !res.timestamp) throw new Error("야후 결과 없음");
+  let closes = (res.indicators.quote[0].close || []).slice();
+  for(let i=1;i<closes.length;i++){ if(closes[i]==null) closes[i]=closes[i-1]; }
+  const dates = res.timestamp.map(t=>{
+    const d = new Date(t*1000);
+    return `${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`;
+  });
+  const meta = res.meta || {};
+  return {closes, dates,
+    price: meta.regularMarketPrice || closes[closes.length-1],
+    currency: meta.currency || "KRW", srcName: meta.shortName || meta.longName};
+}
+
+function googleSymbols(t){
+  const m = t.match(/^(\d{6})\.(KS|KQ)$/);
+  if(m) return [`${m[1]}:${m[2]==="KS"?"KRX":"KOSDAQ"}`];
+  const jp = t.match(/^(\d+)\.T$/);
+  if(jp) return [`${jp[1]}:TYO`];
+  return [`${t}:NASDAQ`, `${t}:NYSE`, `${t}:NYSEARCA`, `${t}:BATS`];
+}
+async function fetchGooglePrice(t){
+  for(const sym of googleSymbols(t)){
+    try{
+      const html = await fetchViaProxy(`https://www.google.com/finance/quote/${encodeURIComponent(sym)}`, false);
+      const cur = t.endsWith(".KS")||t.endsWith(".KQ") ? "KRW" : t.endsWith(".T") ? "JPY" : "USD";
+      const m = html.match(/data-last-price="([\d.]+)"/);
+      if(m) return {price: parseFloat(m[1]), currency: cur};
+      const ticks = [...html.matchAll(/\],\[(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),\d+,\d+,\d+\]/g)];
+      if(ticks.length) return {price: parseFloat(ticks[ticks.length-1][1]), currency: cur};
+    }catch(e){ /* 다음 심볼 */ }
+  }
+  throw new Error("구글 시세 없음");
+}
+
+async function fetchNaverPrice(t){
+  const kr = t.match(/^(\d{6})\.(KS|KQ)$/);
+  if(kr){
+    const j = await fetchViaProxy(`https://polling.finance.naver.com/api/realtime/domestic/stock/${kr[1]}`, true);
+    const d = j.datas && j.datas[0];
+    if(d && d.closePrice) return {price: parseFloat(String(d.closePrice).replace(/,/g,"")), currency:"KRW"};
+    throw new Error("네이버 시세 없음");
+  }
+  if(t.endsWith(".T")) throw new Error("네이버 미지원 시장");
+  for(const suf of ["O","N","A"]){
+    try{
+      const j = await fetchViaProxy(`https://api.stock.naver.com/stock/${encodeURIComponent(t)}.${suf}/basic`, true);
+      if(j && j.closePrice) return {price: parseFloat(String(j.closePrice).replace(/,/g,"")), currency:"USD"};
+    }catch(e){}
+  }
+  throw new Error("네이버 시세 없음");
+}
+async function fetchNaverHistoryKR(t){
+  const kr = t.match(/^(\d{6})\.(KS|KQ)$/);
+  if(!kr) throw new Error("국내 종목 아님");
+  const end = new Date(), start = new Date(); start.setFullYear(end.getFullYear()-1);
+  const fmt = d=>`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+  const txt = await fetchViaProxy(
+    `https://api.finance.naver.com/siseJson.naver?symbol=${kr[1]}&requestType=1&startTime=${fmt(start)}&endTime=${fmt(end)}&timeframe=day`, false);
+  const rows2 = [...txt.matchAll(/\[\s*"?(\d{8})"?\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/g)];
+  if(rows2.length < 60) throw new Error("네이버 히스토리 부족");
+  return {
+    dates: rows2.map(r=>`${r[1].slice(4,6)}/${r[1].slice(6,8)}`),
+    closes: rows2.map(r=>parseFloat(r[5])),
+    currency:"KRW"
+  };
+}
+
+async function fetchStock(t){
+  let hist=null, price=null, currency=null, source=null;
+  try{
+    const y = await fetchYahoo(t);
+    hist = {closes:y.closes, dates:y.dates};
+    price = y.price; currency = y.currency; source = "야후";
+  }catch(e){}
+  if(price == null){
+    try{ const g = await fetchGooglePrice(t); price=g.price; currency=g.currency; source="구글"; }catch(e){}
+  }
+  if(price == null){
+    try{ const n = await fetchNaverPrice(t); price=n.price; currency=n.currency; source="네이버"; }catch(e){}
+  }
+  if(!hist){
+    try{ const h = await fetchNaverHistoryKR(t); hist={closes:h.closes, dates:h.dates}; currency=currency||h.currency; }catch(e){}
+  }
+  if(price == null) throw new Error("현재가 조회 실패 (야후·구글·네이버 모두 응답 없음)");
+  if(!hist || hist.closes.length < 60) throw new Error("이동평균 산출용 히스토리 부족");
+  return {hist, price, currency: currency||"KRW", source};
+}
+
+/* ═══════════ 지표 계산 ═══════════ */
+function sma(arr, n, i){
+  if(i < n-1) return null;
+  let s = 0, c = 0;
+  for(let k = i-n+1; k <= i; k++){
+    if(arr[k] == null) return null;
+    s += arr[k]; c++;
+  }
+  return s / c;
+}
+function analyze(ticker, name, data){
+  const closes = data.hist.closes.slice();
+  const dates  = data.hist.dates.slice();
+  const prev = closes.length>=2 ? closes[closes.length-2] : null;
+  closes[closes.length-1] = data.price;
+  const last = closes.length - 1;
+  if(last < 60) throw new Error("데이터 부족 (60일 미만)");
+
+  const ma5Arr  = closes.map((_,i)=>sma(closes,5,i));
+  const ma10Arr = closes.map((_,i)=>sma(closes,10,i));
+  const ma20Arr = closes.map((_,i)=>sma(closes,20,i));
+  const ma60Arr = closes.map((_,i)=>sma(closes,60,i));
+  const ma120Arr= closes.map((_,i)=>sma(closes,120,i));
+  const d5Arr   = closes.map((v,i)=> ma5Arr[i]   ? v/ma5Arr[i]*100   : null);
+  const d10Arr  = closes.map((v,i)=> ma10Arr[i]  ? v/ma10Arr[i]*100  : null);
+  const d20Arr  = closes.map((v,i)=> ma20Arr[i]  ? v/ma20Arr[i]*100  : null);
+  const d60Arr  = closes.map((v,i)=> ma60Arr[i]  ? v/ma60Arr[i]*100  : null);
+  const d120Arr = closes.map((v,i)=> ma120Arr[i] ? v/ma120Arr[i]*100 : null);
+  const recent60d20 = d20Arr.slice(Math.max(0,last-59), last).filter(v=>v!=null);
+
+  return {
+    t:ticker, n:name,
+    currency: data.currency, source: data.source,
+    price: data.price, chg: prev ? (data.price/prev-1)*100 : 0,
+    ma20: ma20Arr[last], ma60: ma60Arr[last],
+    d5: d5Arr[last], d10: d10Arr[last],
+    d20: d20Arr[last], d60: d60Arr[last], d120: d120Arr[last],
+    recent60d20,
+    series:{dates, closes, ma5Arr, ma10Arr, ma20Arr, ma60Arr, ma120Arr, d5Arr, d10Arr, d20Arr, d60Arr, d120Arr}
+  };
+}
+function signalOf(r){
+  const p = PHASES[document.getElementById("phase").value];
+  if(r.d20 <= p.buy || r.d60 <= D60.buy)  return {key:"buy",  txt:"과매도·매수 관심"};
+  if(r.d20 >= p.sell || r.d60 >= D60.sell) return {key:"sell", txt:"과매수·매도 관심"};
+  return {key:"hold", txt:"중립"};
+}
+
+/* ═══════════ 포맷 ═══════════ */
+function fmtPrice(v, cur){
+  if(v == null) return "–";
+  if(cur === "KRW") return "₩" + Math.round(v).toLocaleString("ko-KR");
+  if(cur === "JPY") return "¥" + Math.round(v).toLocaleString("ja-JP");
+  return "$" + v.toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+const f1 = v => v==null ? "–" : v.toFixed(1);
+function fmtVal(r, v){
+  if(v == null) return "–";
+  if(r.t && r.t.startsWith("^")) return v.toLocaleString("ko-KR",{minimumFractionDigits:2, maximumFractionDigits:2}) + " pt";
+  return fmtPrice(v, r.currency);
+}
+
+/* ═══════════ 렌더링 ═══════════ */
+function render(){
+  const isGuide = activeTab === "guide";
+  document.getElementById("guide").classList.toggle("show", isGuide);
+  document.querySelector(".summary").style.display = isGuide ? "none" : "";
+  document.querySelector(".tbl-wrap").style.display = isGuide ? "none" : "";
+  document.querySelector(".notice").style.display = isGuide ? "none" : "";
+  document.getElementById("updatedAt").style.display = isGuide ? "none" : "";
+  if(isGuide) return;
+
+  const tabRows = rows.filter(r => (r.g||"stock") === activeTab);
+  const tbody = document.getElementById("tbody");
+  const p = PHASES[document.getElementById("phase").value];
+  const valid = tabRows.filter(r=>!r.error);
+
+  const sorted = tabRows.slice().sort((a,b)=>{
+    if(a.error) return 1; if(b.error) return -1;
+    let va, vb;
+    if(sortKey==="name"){va=a.n; vb=b.n; return sortAsc ? va.localeCompare(vb,"ko") : vb.localeCompare(va,"ko");}
+    if(sortKey==="sig"){const o={buy:0,hold:1,sell:2}; va=o[signalOf(a).key]; vb=o[signalOf(b).key];}
+    else {va=a[sortKey]; vb=b[sortKey];}
+    return sortAsc ? va-vb : vb-va;
+  });
+
+  tbody.innerHTML = "";
+  sorted.forEach(r=>{
+    const tr = document.createElement("tr");
+    if(r.error){
+      tr.className = "err-row";
+      tr.innerHTML = `<td><span class="nm">${r.n}</span><span class="tk">${r.t}</span></td>
+        <td colspan="6">⚠ ${r.error}</td>
+        <td><button class="del" data-t="${r.t}" title="삭제">✕</button></td>`;
+      tbody.appendChild(tr); return;
+    }
+    const sig = signalOf(r);
+    const lo = p.buy-8, hi = p.sell+8;
+    const pos = Math.max(0, Math.min(100, (r.d20-lo)/(hi-lo)*100));
+    const stopBuy = ((p.buy-lo)/(hi-lo)*100).toFixed(1);
+    const stopSell = ((p.sell-lo)/(hi-lo)*100).toFixed(1);
+    tr.innerHTML = `
+      <td><span class="nm">${r.n}</span><span class="tk">${r.t} · ${r.source||"야후"}</span></td>
+      <td>${fmtVal(r, r.price)}</td>
+      <td class="${r.chg>=0?'up':'down'}">${r.chg>=0?'+':''}${r.chg.toFixed(2)}%</td>
+      <td class="d-val ${r.d20>=100?'up':'down'}">${f1(r.d20)}</td>
+      <td class="${r.d60>=100?'up':'down'}">${f1(r.d60)}</td>
+      <td><span class="gauge" style="background:linear-gradient(90deg,rgba(47,163,107,.55) 0 ${stopBuy}%,rgba(140,160,190,.25) ${stopBuy}% ${stopSell}%,rgba(229,72,77,.55) ${stopSell}% 100%)">
+        <span class="mid"></span><span class="pin" style="left:calc(${pos}% - 1px)"></span></span></td>
+      <td><span class="badge ${sig.key}">${sig.txt}</span></td>
+      <td><button class="del" data-t="${r.t}" title="삭제">✕</button></td>`;
+    tr.addEventListener("click", e=>{ if(!e.target.classList.contains("del")) openModal(r); });
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".del").forEach(b=>b.addEventListener("click", e=>{
+    e.stopPropagation();
+    const t = e.target.dataset.t;
+    watchlist = watchlist.filter(w=>w.t!==t);
+    rows = rows.filter(r=>r.t!==t);
+    store.set("dispWatchlist", watchlist);
+    // Gist 자동 저장
+    gistSave(watchlist).catch(()=>{});
+    render();
+  }));
+
+  let nb=0, nh=0, ns=0, sum=0;
+  valid.forEach(r=>{
+    const k = signalOf(r).key;
+    if(k==="buy")nb++; else if(k==="sell")ns++; else nh++;
+    sum += r.d20;
+  });
+  const unit = activeTab==="idx" ? "지수" : "종목";
+  document.getElementById("cntBuy").textContent  = nb + unit;
+  document.getElementById("cntHold").textContent = nh + unit;
+  document.getElementById("cntSell").textContent = ns + unit;
+  document.getElementById("avgD").textContent = valid.length ? (sum/valid.length).toFixed(1) : "–";
+  document.getElementById("updatedAt").textContent =
+    `총 ${valid.length}${activeTab==="idx"?"지수":"종목"} · ${PHASES[document.getElementById("phase").value].label} 기준 · `
+    + (dataMode==="자동갱신" ? `자동갱신 데이터 ${dataStamp} (20분 주기)`
+      : dataMode==="내장 스냅샷" ? `스냅샷 데이터 ${dataStamp}`
+      : `실시간 조회 ${new Date().toLocaleString("ko-KR")}`);
+}
+
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click", ()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  activeTab = b.dataset.tab;
+  render();
+}));
+
+document.getElementById("proxyBtn").addEventListener("click", ()=>{
+  const cur = personalProxy();
+  const v = prompt(
+    "실시간 모드용 개인 프록시 주소를 입력하세요.\n비워두면 GitHub Actions 자동갱신 데이터를 사용합니다.", cur||"");
+  if(v===null) return;
+  store.set("dispProxy", v.trim());
+  loadAll();
+});
+
+/* ═══════════ 상세 모달 & 차트 ═══════════ */
+function openModal(r){
+  const p = PHASES[document.getElementById("phase").value];
+  const sig = signalOf(r);
+  document.getElementById("mTitle").textContent = r.n;
+  document.getElementById("mSub").textContent = `${r.t} · ${p.label} 기준 (매수 ${p.buy} / 매도 ${p.sell})`;
+  document.getElementById("mPrice").textContent = fmtVal(r, r.price);
+  document.getElementById("mMa20").textContent = fmtVal(r, r.ma20);
+  document.getElementById("mMa60").textContent = fmtVal(r, r.ma60);
+  const sigEl = document.getElementById("mSig");
+  sigEl.innerHTML = `<span class="badge ${sig.key}">${sig.txt}</span>`;
+  document.getElementById("mNote").textContent =
+    `현재 20일 이격도 ${f1(r.d20)} · 60일 이격도 ${f1(r.d60)}. `
+    + (sig.key==="buy" ? "이동평균 대비 낙폭이 큰 과매도 구간으로, 평균회귀 관점의 매수 관심 영역입니다."
+      : sig.key==="sell" ? "이동평균 대비 상승폭이 큰 과매수 구간으로, 분할 매도·차익 실현 검토 영역입니다."
+      : "임계값 이내의 중립 구간입니다. 변곡점 발생 여부를 관찰하십시오.");
+
+  const s = r.series;
+  const N = 130;
+  const st = Math.max(0, s.dates.length - N);
+  const cut = a => a.slice(st);
+
+  if(charts.price) charts.price.destroy();
+  if(charts.disp) charts.disp.destroy();
+  const gridOpt = {color:"#1B3457"};
+  const tickOpt = {color:"#8CA0BE", font:{size:10}, maxTicksLimit:8};
+
+  charts.price = new Chart(document.getElementById("priceChart"), {
+    type:"line",
+    data:{labels:cut(s.dates), datasets:[
+      {label:"주가", data:cut(s.closes), borderColor:"#F2EDE3", borderWidth:1.8, pointRadius:0, tension:.15},
+      {label:"20일선", data:cut(s.ma20Arr), borderColor:"#C9A227", borderWidth:1.4, pointRadius:0, tension:.15},
+      {label:"60일선", data:cut(s.ma60Arr), borderColor:"#3B82F6", borderWidth:1.4, pointRadius:0, tension:.15}
+    ]},
+    options:{responsive:true, interaction:{mode:"index",intersect:false},
+      plugins:{legend:{labels:{color:"#F2EDE3", boxWidth:14, font:{size:11}}}},
+      scales:{x:{grid:gridOpt,ticks:tickOpt}, y:{grid:gridOpt,ticks:tickOpt}}}
+  });
+
+  charts.disp = new Chart(document.getElementById("dispChart"), {
+    type:"line",
+    data:{labels:cut(s.dates), datasets:[
+      {label:"이격도 20일", data:cut(s.d20Arr), borderColor:"#E3C567", borderWidth:1.8, pointRadius:0, tension:.15},
+      {label:"이격도 60일", data:cut(s.d60Arr), borderColor:"#6FA8FF", borderWidth:1.3, pointRadius:0, tension:.15},
+      {label:`매수선 ${p.buy}`, data:cut(s.dates).map(()=>p.buy), borderColor:"rgba(47,163,107,.9)", borderWidth:1, borderDash:[5,4], pointRadius:0},
+      {label:`매도선 ${p.sell}`, data:cut(s.dates).map(()=>p.sell), borderColor:"rgba(229,72,77,.9)", borderWidth:1, borderDash:[5,4], pointRadius:0},
+      {label:"기준 100", data:cut(s.dates).map(()=>100), borderColor:"rgba(140,160,190,.6)", borderWidth:1, pointRadius:0}
+    ]},
+    options:{responsive:true, interaction:{mode:"index",intersect:false},
+      plugins:{legend:{labels:{color:"#F2EDE3", boxWidth:14, font:{size:10.5}}}},
+      scales:{x:{grid:gridOpt,ticks:tickOpt}, y:{grid:gridOpt,ticks:tickOpt}}}
+  });
+
+  document.getElementById("interpWrap").classList.add("show");
+  document.getElementById("interpPanel").style.display = "none";
+  document.getElementById("interpBtn").textContent = "▶ 이격도 해석 보기";
+  document.getElementById("interpBtn").onclick = () => {
+    const panel = document.getElementById("interpPanel");
+    if(panel.style.display === "none"){
+      buildInterp(r);
+      panel.style.display = "";
+      document.getElementById("interpBtn").textContent = "▼ 이격도 해석 닫기";
+    } else {
+      panel.style.display = "none";
+      document.getElementById("interpBtn").textContent = "▶ 이격도 해석 보기";
+    }
+  };
+
+  document.getElementById("modalBg").classList.add("open");
+}
+
+/* ── 이격도 해석 생성 ── */
+function buildInterp(r){
+  const p = PHASES[document.getElementById("phase").value];
+  const f1l = v => v==null ? "–" : v.toFixed(1);
+
+  const periods = [
+    {label:"5일",   val:r.d5,   hot:103, cold:97},
+    {label:"10일",  val:r.d10,  hot:104, cold:96},
+    {label:"20일",  val:r.d20,  hot:p.sell, cold:p.buy},
+    {label:"60일",  val:r.d60,  hot:D60.sell, cold:D60.buy},
+  ];
+  document.getElementById("maGrid").innerHTML = periods.map(({label,val,hot,cold})=>{
+    let cls="ok", sigTxt="중립";
+    if(val!=null && val>=hot){cls="hot"; sigTxt="과매수";}
+    else if(val!=null && val<=cold){cls="cold"; sigTxt="과매도";}
+    const color = val==null?"":val>=100?"var(--up)":"var(--down)";
+    return `<div class="ma-cell">
+      <div class="mc-period">${label} 이격도</div>
+      <div class="mc-val" style="color:${color}">${f1l(val)}</div>
+      <span class="mc-sig ${cls}">${sigTxt}</span>
+    </div>`;
+  }).join("");
+
+  let pctTxt = "";
+  if(r.recent60d20 && r.recent60d20.length >= 10 && r.d20!=null){
+    const sorted2 = [...r.recent60d20].sort((a,b)=>a-b);
+    const rank = sorted2.filter(v=>v<=r.d20).length;
+    const pct = Math.round(rank/sorted2.length*100);
+    const minV = sorted2[0].toFixed(1), maxV = sorted2[sorted2.length-1].toFixed(1);
+    pctTxt = `최근 3개월(60거래일) 20일 이격도 범위는 <span class="hl-gold">${minV} ~ ${maxV}</span>이며, 현재 <span class="hl-gold">${f1l(r.d20)}</span>은 이 구간의 <span class="hl-gold">하위 ${pct}%</span> 수준입니다.`;
+  }
+
+  let trendTxt = "";
+  if(r.d5!=null && r.d20!=null){
+    if(r.d5 > r.d20 + 1.5) trendTxt = "5일 이격도가 20일 이격도보다 <span class='hl-sell'>높아</span> 단기 상승 모멘텀이 중기 추세를 앞서고 있습니다.";
+    else if(r.d5 < r.d20 - 1.5) trendTxt = "5일 이격도가 20일 이격도보다 <span class='hl-buy'>낮아</span> 단기적으로 중기 추세 대비 낙폭이 발생한 상태입니다.";
+    else trendTxt = "5일·20일 이격도 격차가 크지 않아 단기-중기 추세가 비교적 <span class='hl-gold'>동조</span>하고 있습니다.";
+  }
+
+  let consistTxt = "";
+  if(r.d20!=null && r.d60!=null){
+    const both100 = r.d20>=100 && r.d60>=100;
+    const bothBelow = r.d20<100 && r.d60<100;
+    if(both100) consistTxt = "20일·60일 이격도가 모두 <span class='hl-sell'>100 이상</span>으로, 단·중기 모두 이동평균 위에 위치한 강세 구조입니다.";
+    else if(bothBelow) consistTxt = "20일·60일 이격도가 모두 <span class='hl-buy'>100 미만</span>으로, 단·중기 모두 이동평균 아래에 위치한 약세 구조입니다.";
+    else if(r.d20>=100 && r.d60<100) consistTxt = "20일 이격도는 100 이상이나 60일은 100 미만으로, <span class='hl-gold'>단기 반등 중기 침체</span> 혼재 구간입니다.";
+    else consistTxt = "20일 이격도는 100 미만이나 60일은 100 이상으로, <span class='hl-gold'>단기 조정 중기 강세</span> 혼재 구간입니다.";
+  }
+
+  let longTxt = "";
+  if(r.d120!=null){
+    if(r.d120>=115) longTxt = `120일 이격도 <span class="hl-sell">${f1l(r.d120)}</span>는 장기 과열권(115↑)으로, 대세 상승의 과도한 확장 구간일 수 있습니다.`;
+    else if(r.d120>=100) longTxt = `120일 이격도 <span class="hl-gold">${f1l(r.d120)}</span>는 장기 이평선 위로, 중장기 추세는 우상향 기조입니다.`;
+    else if(r.d120>=88) longTxt = `120일 이격도 <span class="hl-gold">${f1l(r.d120)}</span>는 장기 이평선 아래이나 침체권(88↓)에는 미치지 않습니다.`;
+    else longTxt = `120일 이격도 <span class="hl-buy">${f1l(r.d120)}</span>는 장기 침체권(88↓)으로, 분할매수 관점의 장기 저점 구간으로 볼 수 있습니다.`;
+  }
+
+  const sig = signalOf(r);
+  let concTxt = "";
+  if(sig.key==="buy"){
+    concTxt = `현재 <span class="hl-buy">${p.label} 기준 매수 관심(이격도 ${p.buy} 이하 또는 60일 ${D60.buy} 이하)</span> 구간에 진입해 있습니다. 평균회귀 가능성이 높은 구간이나, 추가 하락 가능성도 열어두고 분할 접근이 권장됩니다.`;
+  } else if(sig.key==="sell"){
+    concTxt = `현재 <span class="hl-sell">${p.label} 기준 매도 관심(이격도 ${p.sell} 이상 또는 60일 ${D60.sell} 이상)</span> 구간에 위치합니다. 단기 과열 해소 가능성이 있으므로 보유 비중 점검과 분할 차익 실현을 고려할 수 있습니다.`;
+  } else {
+    concTxt = `현재 <span class="hl-gold">${p.label} 기준 중립 구간</span>입니다. 매수·매도 임계값(매수 ${p.buy} / 매도 ${p.sell}) 이내로 특별한 신호는 없으나, 이격도 방향성과 거래량·펀더멘털을 함께 관찰하며 변곡점을 모니터링하십시오.`;
+  }
+
+  const parts = [pctTxt, trendTxt, consistTxt, longTxt, concTxt].filter(Boolean);
+  document.getElementById("interpBody").innerHTML = parts.map(t=>`<p>${t}</p>`).join("");
+}
+
+document.getElementById("modalClose").addEventListener("click", ()=>document.getElementById("modalBg").classList.remove("open"));
+document.getElementById("modalBg").addEventListener("click", e=>{ if(e.target.id==="modalBg") e.target.classList.remove("open"); });
+
+/* ═══════════ 종목 추가 공통 함수 ═══════════ */
+async function doAddTicker(t){
+  if(!t) return;
+  if(watchlist.some(w=>w.t===t)){ showToast("⚠ 이미 등록된 티커입니다: " + t); return; }
+  const w = {t, n:t, g: activeTab==="idx" ? "idx" : "stock"};
+  watchlist.push(w);
+  store.set("dispWatchlist", watchlist);
+  try{
+    const d = await fetchStock(t);
+    try{ const y = await fetchYahoo(t); if(y.srcName) w.n = y.srcName; }catch(e){}
+    store.set("dispWatchlist", watchlist);
+    rows.push({...analyze(t, w.n, d), g:w.g});
+    showToast(`✅ ${w.n}(${t}) 추가됨`);
+  }catch(e){
+    rows.push({t, n:t, g:w.g, error:"시세 조회 실패 — 티커 형식 확인 (국내: 005930.KS / 코스닥: .KQ / 미국: NVDA)"});
+    showToast(`⚠ ${t} 추가됐으나 시세 조회 실패`);
+  }
+  // Gist 자동 저장
+  gistSave(watchlist).catch(()=>{});
+  render();
+}
+
+/* ═══════════ 로드 흐름 ═══════════ */
+let dataStamp = "", dataMode = "";
+function loadEmbedded(){
+  const el = document.getElementById("embeddedData");
+  if(!el) throw new Error("내장 데이터 없음");
+  const txt = el.textContent.trim();
+  if(!txt || txt.indexOf("__EMBEDDED") === 0) throw new Error("내장 데이터 없음");
+  return JSON.parse(txt);
+}
+async function loadAll(){
+  const btn = document.getElementById("refreshBtn");
+  btn.disabled = true; btn.textContent = "불러오는 중…";
+  rows = []; dataStamp = ""; dataMode = "";
+
+  const live = !!personalProxy();
+  if(!live){
+    try{
+      const d = await loadDataJson();
+      rows = rowsFromDataJson(d);
+      dataStamp = d.updated || ""; dataMode = "자동갱신";
+      render();
+      btn.disabled = false; btn.textContent = "새로고침";
+      return;
+    }catch(e){}
+    try{
+      const d = loadEmbedded();
+      rows = rowsFromDataJson(d);
+      dataStamp = d.updated || ""; dataMode = "내장 스냅샷";
+      render();
+      btn.disabled = false; btn.textContent = "새로고침";
+      return;
+    }catch(e){}
+  }
+
+  for(let i=0;i<watchlist.length;i+=5){
+    const batch = watchlist.slice(i,i+5);
+    const results = await Promise.allSettled(batch.map(w=>fetchStock(w.t)));
+    results.forEach((res,idx)=>{
+      const w = batch[idx];
+      if(res.status==="fulfilled"){
+        try{ rows.push({...analyze(w.t, w.n, res.value), g:w.g}); }
+        catch(e){ rows.push({t:w.t, n:w.n, g:w.g, error:e.message}); }
+      } else rows.push({t:w.t, n:w.n, g:w.g, error:(res.reason && res.reason.message || "시세 조회 실패")
+        + " — ⚙에서 개인 프록시를 설정하거나 GitHub Actions 자동갱신을 활성화하세요"});
+    });
+    render();
+  }
+  btn.disabled = false; btn.textContent = "새로고침";
+}
+
+/* ═══════════ 이벤트 바인딩 ═══════════ */
+document.getElementById("refreshBtn").addEventListener("click", loadAll);
+document.getElementById("phase").addEventListener("change", render);
+document.querySelectorAll(".tbl thead th[data-k]").forEach(th=>{
+  th.addEventListener("click", ()=>{
+    const k = th.dataset.k;
+    if(sortKey===k) sortAsc=!sortAsc; else {sortKey=k; sortAsc=true;}
+    document.querySelectorAll(".arrow").forEach(a=>a.remove());
+    const sp = document.createElement("span");
+    sp.className="arrow"; sp.textContent = sortAsc?" ▲":" ▼";
+    th.appendChild(sp);
+    render();
+  });
+});
+
+// 데스크톱 추가 버튼
+document.getElementById("addBtn").addEventListener("click", ()=>{
+  const inp = document.getElementById("newTicker");
+  const t = inp.value.trim().toUpperCase();
+  inp.value = "";
+  doAddTicker(t);
+});
+document.getElementById("newTicker").addEventListener("keydown", e=>{ if(e.key==="Enter") document.getElementById("addBtn").click(); });
+
+// 모바일 하단바 추가
+document.getElementById("mobileAddBtn").addEventListener("click", ()=>{
+  const inp = document.getElementById("mobileNewTicker");
+  const t = inp.value.trim().toUpperCase();
+  inp.value = "";
+  doAddTicker(t);
+});
+document.getElementById("mobileNewTicker").addEventListener("keydown", e=>{ if(e.key==="Enter") document.getElementById("mobileAddBtn").click(); });
+
+loadAll();
+</script>
+</body>
+</html>
